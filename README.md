@@ -43,13 +43,13 @@ The server listens by default on `https://0.0.0.0:4443`. Open the admin portal:
 Note: If your browser warns about the self-signed certificate, proceed/allow for testing only.
 
 Setup (Agent)
-1) Configure the agent server URL and ID in `agent_https.go` (top of file):
+1) Configure the agent server URL in `agent_https.go` (top of file). The agent ID is derived automatically from `<hostname>-<username>` (cross-platform):
 ```go
 const (
     server     = "https://<server-ip>:4443"
-    agentID    = "agent01"
     beaconFreq = 20 * time.Second
 )
+// agentID is derived at runtime from os.Hostname() and current user
 ```
 
 2) Build and run the agent
