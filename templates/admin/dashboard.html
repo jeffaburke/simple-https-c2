@@ -25,6 +25,9 @@
         .item { padding: 10px 0; border-bottom: 1px solid #212b44; }
         .meta { color: #93a3bd; font-size: 12px; }
         .flash { padding: 10px 12px; border: 1px solid #2a3758; background: #0e172a; border-radius: 8px; margin-bottom: 12px; }
+        .nav { display:flex; gap: 12px; margin-bottom: 12px; }
+        .nav a { color:#93c5fd; text-decoration:none; padding:6px 10px; border:1px solid #1f2a44; border-radius:8px; }
+        .nav a.active { background:#12203a; border-color:#2a3d68; }
     </style>
     <script>
         function fillAgent(agentId) {
@@ -122,6 +125,10 @@
     <div class="wrap">
         <div class="card">
             <h1>C2 Admin Dashboard</h1>
+            <div class="nav">
+                <a class="active" href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('admin_uploads_page') }}">Uploads</a>
+            </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -145,24 +152,6 @@
                 </div>
                 <div>
                     <button class="btn" type="submit">Queue Task</button>
-                </div>
-            </form>
-
-            <form class="row2" method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data">
-                <div>
-                    <label for="u_agent_id">Upload to Agent</label>
-                    <input id="u_agent_id" name="agent_id" placeholder="e.g., agent01" list="agent_list" />
-                </div>
-                <div>
-                    <label for="dest_path">Destination path on agent</label>
-                    <input id="dest_path" name="dest_path" placeholder="/tmp/readme.txt or C:\\Users\\me\\readme.txt" />
-                </div>
-                <div>
-                    <label for="file">File</label>
-                    <input id="file" name="file" type="file" />
-                </div>
-                <div>
-                    <button class="btn" type="submit">Upload & Queue</button>
                 </div>
             </form>
 

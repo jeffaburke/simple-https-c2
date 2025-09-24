@@ -105,6 +105,12 @@ def admin_upload():
     return redirect(url_for("dashboard"))
 
 
+@app.route("/admin/uploads", methods=["GET"])  # uploads page
+def admin_uploads_page():
+    agents = sorted(set(list(agent_tasks.keys()) + list(agent_responses.keys()) + list(agent_last_seen.keys())))
+    return render_template("admin/uploads.html", agents=agents)
+
+
 @app.route("/payloads/<path:filename>")
 def payloads(filename):
     return send_from_directory(UPLOAD_DIR, filename, as_attachment=False)

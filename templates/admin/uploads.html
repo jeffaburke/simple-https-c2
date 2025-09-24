@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>C2 Admin - Uploads</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; background: #0b1220; color: #e5e7eb; }
+        .wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
+        .card { background: #0f172a; border: 1px solid #1f2a44; border-radius: 10px; padding: 18px; }
+        h1 { font-size: 22px; margin: 0 0 16px; }
+        label { display: block; font-size: 13px; color: #9ca3af; margin-bottom: 4px; }
+        input { width: 100%; background: #0b1020; color: #e5e7eb; border: 1px solid #273148; border-radius: 8px; padding: 10px 12px; }
+        .row { display: grid; grid-template-columns: 1fr 2fr 1fr auto; gap: 12px; align-items: end; }
+        .btn { background: #2563eb; color: white; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
+        .btn:hover { background: #1d4ed8; }
+        .nav { display:flex; gap: 12px; margin-bottom: 12px; }
+        .nav a { color:#93c5fd; text-decoration:none; padding:6px 10px; border:1px solid #1f2a44; border-radius:8px; }
+        .nav a.active { background:#12203a; border-color:#2a3d68; }
+        .flash { padding: 10px 12px; border: 1px solid #2a3758; background: #0e172a; border-radius: 8px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="card">
+            <h1>Uploads</h1>
+            <div class="nav">
+                <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a class="active" href="{{ url_for('admin_uploads_page') }}">Uploads</a>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form class="row" method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data">
+                <div>
+                    <label for="u_agent_id">Upload to Agent</label>
+                    <input id="u_agent_id" name="agent_id" placeholder="e.g., agent01" list="agent_list" />
+                    <datalist id="agent_list">
+                        {% for a in agents %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+                    </datalist>
+                </div>
+                <div>
+                    <label for="dest_path">Destination path on agent</label>
+                    <input id="dest_path" name="dest_path" placeholder="/tmp/readme.txt or C:\\Users\\me\\readme.txt" />
+                </div>
+                <div>
+                    <label for="file">File</label>
+                    <input id="file" name="file" type="file" />
+                </div>
+                <div>
+                    <button class="btn" type="submit">Upload & Queue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+
+
