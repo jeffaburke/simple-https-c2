@@ -17,6 +17,7 @@
         input, textarea, select { width: 100%; background: #0b1020; color: #e5e7eb; border: 1px solid #273148; border-radius: 8px; padding: 10px 12px; }
         textarea { min-height: 80px; resize: vertical; }
         .row { display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: end; }
+        .row2 { display: grid; grid-template-columns: 1fr 2fr 1fr auto; gap: 12px; align-items: end; margin-top: 12px; }
         .btn { background: #2563eb; color: white; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
         .btn:hover { background: #1d4ed8; }
         .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 16px; }
@@ -144,6 +145,24 @@
                 </div>
                 <div>
                     <button class="btn" type="submit">Queue Task</button>
+                </div>
+            </form>
+
+            <form class="row2" method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data">
+                <div>
+                    <label for="u_agent_id">Upload to Agent</label>
+                    <input id="u_agent_id" name="agent_id" placeholder="e.g., agent01" list="agent_list" />
+                </div>
+                <div>
+                    <label for="dest_path">Destination path on agent</label>
+                    <input id="dest_path" name="dest_path" placeholder="/tmp/readme.txt or C:\\Users\\me\\readme.txt" />
+                </div>
+                <div>
+                    <label for="file">File</label>
+                    <input id="file" name="file" type="file" />
+                </div>
+                <div>
+                    <button class="btn" type="submit">Upload & Queue</button>
                 </div>
             </form>
 

